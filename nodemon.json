@@ -1,0 +1,4 @@
+{
+  "watch": ["bot.js"],
+  "ignore": ["assignments.json", "*.json", "node_modules"]
+}
