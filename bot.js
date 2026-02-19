@@ -382,39 +382,45 @@ bot.on("photo", async (ctx) => {
 // AI HANDLE TEXT
 // =====================
 bot.on("text", async (ctx) => {
+  // ១. បើផ្ដើមដោយ / (Command) ទុកឱ្យ bot.command ជាអ្នកធ្វើការ
   if (ctx.message.text.startsWith("/")) return;
 
-  await ctx.sendChatAction("typing");
-  const aiRes = await askAI(ctx.message.text);
+  const text = ctx.message.text;
+  const isPrivate = ctx.chat.type === "private"; // Chat ផ្ទាល់ខ្លួន
+  const isMentioned = text.includes(`@${ctx.botInfo.username}`); // Tag @ឈ្មោះបត
+  const isCalledName = text.includes("លក្ខិណា"); // ហៅឈ្មោះ "លក្ខិណា"
 
-  if (aiRes.isAssignment) {
-    try {
-      // Save to MongoDB
-      const newItem = new Assignment({
-        id: generateId(), // បង្កើត Short ID ដាក់ចូល DB
-        title: aiRes.title,
-        due: aiRes.due,
-        note: aiRes.note,
-        addedBy: ctx.from.first_name || "AI",
-        chatId: ctx.chat.id,
-      });
+  // 💡 អូននឹងធ្វើការ លុះត្រាតែស្ថិតក្នុងលក្ខខណ្ឌខាងលើមួយ
+  if (isPrivate || isMentioned || isCalledName) {
+    await ctx.sendChatAction("typing");
+    const aiRes = await askAI(text);
 
-      await newItem.save();
+    if (aiRes.isAssignment) {
+      // ✅ កត់ Assignment ចូល MongoDB
+      try {
+        const newItem = new Assignment({
+          id: generateId(),
+          title: aiRes.title,
+          due: aiRes.due,
+          note: aiRes.note,
+          addedBy: ctx.from.first_name || "AI",
+          chatId: ctx.chat.id,
+        });
+        await newItem.save();
 
-      ctx.reply(
-        `✅ **អូនលក្ខិណា បានកត់ Assignment ឱ្យហើយ!**\n` +
-          `📚 ${newItem.title}\n📅 ${newItem.due}\n` +
-          (newItem.note ? `📝 ${newItem.note}\n` : "") +
-          `\n💬 ${aiRes.reply}`,
-        { parse_mode: "Markdown" },
-      );
-    } catch (err) {
-      console.error(err);
-      ctx.reply("❌ សុំទោស! Save ចូល Database អត់បានចា៎។");
+        ctx.reply(
+          `✅ **អូនលក្ខិណា កត់ឱ្យហើយបង!**\n📚 ${newItem.title}\n📅 ${newItem.due}\n💬 ${aiRes.reply}`,
+          { parse_mode: "Markdown" },
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      // ✅ តប Chat លេងធម្មតា
+      ctx.reply(aiRes.reply);
     }
-  } else {
-    ctx.reply(aiRes.reply);
   }
+  // បើគ្មានការ Tag ឬ ហៅឈ្មោះទេ អូននឹងនៅស្ងៀម (Ignore) មិនតបផ្ដេសផ្ដាសទេចា៎!
 });
 
 // =====================
