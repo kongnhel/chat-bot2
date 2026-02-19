@@ -9,7 +9,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ✅ ប្រើ Model 1.5 Flash (ដើម្បីឱ្យលឿន និងមានស្ថេរភាពលើ Server)
+// ✅ ប្រើ Model 1.5 Flash (ឬ 2.5 Flash តាមដែលបងចង់បាន)
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // =====================
@@ -31,7 +31,6 @@ const assignmentSchema = new mongoose.Schema({
   addedBy: String, // ឈ្មោះអ្នកដាក់
   createdAt: { type: Date, default: Date.now },
 });
-
 const Assignment = mongoose.model("Assignment", assignmentSchema);
 
 // ២. បង្កើត Schema ថ្មីសម្រាប់ទុក File (ZIP, Document, Photo) 📦
@@ -44,8 +43,14 @@ const fileSchema = new mongoose.Schema({
   uploadedBy: String,
   createdAt: { type: Date, default: Date.now },
 });
-
 const FileModel = mongoose.model("File", fileSchema);
+
+// ៣. Schema សម្រាប់តាមដាន Quota ប្រចាំថ្ងៃ (Daily Limit Tracker) 📊
+const usageSchema = new mongoose.Schema({
+  date: String, // ទម្រង់ YYYY-MM-DD
+  count: { type: Number, default: 0 },
+});
+const Usage = mongoose.model("Usage", usageSchema);
 
 // =====================
 // HELPERS
@@ -77,6 +82,17 @@ function isValidDate(due) {
 function isPastDate(due) {
   const today = new Date().toISOString().split("T")[0];
   return due < today;
+}
+
+// មុខងារ Check និង Update Quota
+async function checkUsage() {
+  const today = new Date().toISOString().split("T")[0];
+  let usage = await Usage.findOne({ date: today });
+  if (!usage) {
+    usage = new Usage({ date: today, count: 0 });
+    await usage.save();
+  }
+  return usage;
 }
 
 // =====================
@@ -379,7 +395,7 @@ bot.on("photo", async (ctx) => {
 });
 
 // =====================
-// AI HANDLE TEXT
+// AI HANDLE TEXT (With Quota, Trigger & Reply) 🪄
 // =====================
 bot.on("text", async (ctx) => {
   // ១. បើផ្ដើមដោយ / (Command) ទុកឱ្យ bot.command ជាអ្នកធ្វើការ
@@ -392,8 +408,29 @@ bot.on("text", async (ctx) => {
 
   // 💡 អូននឹងធ្វើការ លុះត្រាតែស្ថិតក្នុងលក្ខខណ្ឌខាងលើមួយ
   if (isPrivate || isMentioned || isCalledName) {
+    // ២. ឆែក Quota សិនមុននឹងហៅ AI មកធ្វើការ
+    const usage = await checkUsage();
+
+    if (usage.count >= 20) {
+      return ctx.reply(
+        "បងអើយ... អូនអស់កម្លាំងនិយាយហើយ! ថ្ងៃហ្នឹងអូននិយាយ ២០ ដងអស់ហើយ ចាំស្អែកណា៎បង! 😴",
+        { reply_to_message_id: ctx.message.message_id },
+      );
+    }
+
     await ctx.sendChatAction("typing");
     const aiRes = await askAI(text);
+
+    // Update Quota រាល់ពេលហៅ AI បានជោគជ័យ
+    usage.count += 1;
+    await usage.save();
+
+    let replyMsg = aiRes.reply;
+
+    // ៣. បើដល់សារទី ១៨ ឬ ១៩ ត្រូវរំលឹកបង
+    if (usage.count === 18 || usage.count === 19) {
+      replyMsg += `\n\n_(បងអើយ... អូនលក្ខិណា សល់ដង្ហើមតែ ${20 - usage.count} ដងទៀតទេសម្រាប់ថ្ងៃនេះ!)_`;
+    }
 
     if (aiRes.isAssignment) {
       // ✅ កត់ Assignment ចូល MongoDB
@@ -409,15 +446,18 @@ bot.on("text", async (ctx) => {
         await newItem.save();
 
         ctx.reply(
-          `✅ **អូនលក្ខិណា កត់ឱ្យហើយបង!**\n📚 ${newItem.title}\n📅 ${newItem.due}\n💬 ${aiRes.reply}`,
-          { parse_mode: "Markdown" },
+          `✅ **អូនលក្ខិណា កត់ឱ្យហើយបង!**\n📚 ${newItem.title}\n📅 ${newItem.due}\n💬 ${replyMsg}`,
+          {
+            parse_mode: "Markdown",
+            reply_to_message_id: ctx.message.message_id, // ភ្ជាប់សារ Reply ទៅបង
+          },
         );
       } catch (err) {
         console.error(err);
       }
     } else {
-      // ✅ តប Chat លេងធម្មតា
-      ctx.reply(aiRes.reply);
+      // ✅ តប Chat លេងធម្មតា ដោយ Reply ទៅកាន់សាររបស់បង
+      ctx.reply(replyMsg, { reply_to_message_id: ctx.message.message_id });
     }
   }
   // បើគ្មានការ Tag ឬ ហៅឈ្មោះទេ អូននឹងនៅស្ងៀម (Ignore) មិនតបផ្ដេសផ្ដាសទេចា៎!
@@ -432,7 +472,7 @@ bot.on("text", async (ctx) => {
 
   bot.launch();
   console.log(
-    "🚀 Bot is running with MongoDB, File Saver, & Gemini 2.5 Flash...",
+    "🚀 Bot is running with MongoDB, File Saver, Quota Tracker, & Gemini 2.5 Flash...",
   );
 })();
 
