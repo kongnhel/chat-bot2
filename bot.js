@@ -73,7 +73,7 @@ async function askAI(message) {
   const today = new Date().toISOString().split("T")[0];
 
   const prompt = `
-    Context: You are a funny, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
+    Context: You are a funny,Your name is លក្ខិណា, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
     User Input: "${message}"
     
     Instruction:
@@ -314,7 +314,7 @@ bot.on("text", async (ctx) => {
   await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
   bot.launch();
-  console.log("🚀 Bot is running with MongoDB & Gemini 1.5 Flash...");
+  console.log("🚀 Bot is running with MongoDB & Gemini 2.5 Flash...");
 })();
 
 process.once("SIGINT", () => bot.stop("SIGINT"));

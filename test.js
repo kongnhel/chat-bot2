@@ -15,7 +15,7 @@ async function runTest() {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // ប្រើ Model 'gemini-1.5-flash' (វាដើរស្រួលជាង 2.0 សម្រាប់គណនីខ្លះ)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.0-flash" });
 
     console.log("📡 កំពុងផ្ញើទៅ Google... (Sending request...)");
     
