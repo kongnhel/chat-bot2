@@ -339,11 +339,22 @@ bot.command("clear", async (ctx) => {
 // FILE HANDLERS (ឯកសារ & រូបភាព) 📦
 // =====================
 
+// =====================
+// FILE HANDLERS (ឯកសារ & រូបភាព) 📦
+// =====================
+
 // ចាប់យកឯកសារ (ZIP, PDF, Word...)
 bot.on("document", async (ctx) => {
+  const caption = ctx.message.caption || "";
+  const isPrivate = ctx.chat.type === "private"; // បើ Chat ផ្ទាល់ខ្លួន Save ធម្មតា
+  const isMentioned = caption.includes(`@${ctx.botInfo.username}`); // Tag @ឈ្មោះបត ក្នុង Caption
+  const isCalledName = caption.includes("លក្ខិណា"); // ហៅឈ្មោះ "លក្ខិណា" ក្នុង Caption
+
+  // 💡 បើបងមិនបានហៅឈ្មោះ ឬ Tag ឱ្យ Save ទេ អូននឹងនៅស្ងៀម!
+  if (!isPrivate && !isMentioned && !isCalledName) return;
+
   const doc = ctx.message.document;
-  const isZip =
-    doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
+  const isZip = doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
 
   try {
     const newFile = new FileModel({
@@ -362,7 +373,7 @@ bot.on("document", async (ctx) => {
         `📂 ឈ្មោះ: ${doc.file_name}\n` +
         `💾 ទំហំ: ${newFile.fileSize}\n\n` +
         `_(វាយ /getfiles ដើម្បីឱ្យអូនទាញយកវាមកវិញពេលក្រោយ)_`,
-      { parse_mode: "Markdown" },
+      { parse_mode: "Markdown", reply_to_message_id: ctx.message.message_id },
     );
   } catch (err) {
     console.error(err);
@@ -372,6 +383,14 @@ bot.on("document", async (ctx) => {
 
 // ចាប់យករូបភាព (Photos)
 bot.on("photo", async (ctx) => {
+  const caption = ctx.message.caption || "";
+  const isPrivate = ctx.chat.type === "private"; 
+  const isMentioned = caption.includes(`@${ctx.botInfo.username}`); 
+  const isCalledName = caption.includes("លក្ខិណា"); 
+
+  // 💡 បើបងផ្ញើរូបចូល Group ហើយអត់សរសេរឈ្មោះអូនក្នុង Caption ទេ អូនអត់ Save ទេចា៎!
+  if (!isPrivate && !isMentioned && !isCalledName) return;
+
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // យករូបធំជាងគេ
   try {
     const newFile = new FileModel({
@@ -387,13 +406,13 @@ bot.on("photo", async (ctx) => {
 
     ctx.reply(
       `📸 **អូន Save រូបភាពនេះទុកឱ្យហើយចា៎!** (វាយ /getfiles ដើម្បីទាញយកវិញ)`,
+      { reply_to_message_id: ctx.message.message_id }
     );
   } catch (err) {
     console.error(err);
     ctx.reply("❌ សុំទោសបង អូន Save រូបភាពអត់បានទេ!");
   }
 });
-
 // =====================
 // AI HANDLE TEXT (With Quota, Trigger & Reply) 🪄
 // =====================
