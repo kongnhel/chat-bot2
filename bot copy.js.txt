@@ -1,18 +1,16 @@
 require("dotenv").config();
 const { Telegraf } = require("telegraf");
-const mongoose = require("mongoose");
-const OpenAI = require("openai"); // 🔄 ប្តូរពី GoogleGenerativeAI មកប្រើ OpenAI សម្រាប់ OpenRouter
+const mongoose = require("mongoose"); // ប្រើ Mongoose ជំនួស fs
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // =====================
 // SETUP & CONFIG
 // =====================
 const bot = new Telegraf(process.env.BOT_TOKEN);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ✅ បង្កើត Object សម្រាប់តភ្ជាប់ទៅ OpenRouter
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY, // ⚠️ កុំភ្លេចបន្ថែម OPENROUTER_API_KEY ក្នុង .env file របស់បង
-});
+// ✅ ប្រើ Model 1.5 Flash (ឬ 2.5 Flash តាមដែលបងចង់បាន)
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // =====================
 // MONGODB CONNECTION 🍃
@@ -96,54 +94,53 @@ async function checkUsage() {
   }
   return usage;
 }
+
 // =====================
-// AI BRAIN 🧠 (អូនលក្ខិណា និយាយអង់គ្លេស កាត់មាត់ដាច)
+// AI BRAIN 🧠
 // =====================
 async function askAI(message) {
   const today = new Date().toISOString().split("T")[0];
 
   const prompt = `
-    Context: You are a funny, roasting English-speaking assistant bot named "Leakhena". Act like a cute but slightly sarcastic Gen-Z girl. Today is ${today}.
+    Context: You are a funny,Your name is លក្ខិណា, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
     User Input: "${message}"
     
     Instruction:
     1. Check if the user wants to add a task/assignment/homework.
-    2. If YES, return ONLY this JSON format:
-       {"isAssignment": true, "title": "Task Title (English)", "due": "YYYY-MM-DD", "note": "Extra info", "reply": "Funny English confirmation (roast them slightly for having so much homework)."}
-    3. If NO (just chatting), return ONLY this JSON format:
-       {"isAssignment": false, "reply": "Funny/Roasting English reply."}
+    2. If YES, return JSON:
+       {
+         "isAssignment": true,
+         "title": "Task Title",
+         "due": "YYYY-MM-DD",
+         "note": "Extra info",
+         "reply": "Funny Khmer confirmation (roast them slightly)."
+       }
+    3. If NO (just chatting), return JSON:
+       {
+         "isAssignment": false,
+         "reply": "Funny/Roasting Khmer reply."
+       }
     
-    IMPORTANT: 
-    - You MUST reply ENTIRELY in ENGLISH. Do not use Khmer language in your replies.
-    - Return ONLY valid JSON. No Markdown blocks. No extra text before or after the JSON.
+    IMPORTANT: Return ONLY valid JSON.
   `;
 
   try {
-    console.log(`💬 កំពុងឱ្យអូន Leakhena គិត: "${message}"...`);
-
-    const response = await openai.chat.completions.create({
-      model: "stepfun/step-3.5-flash:free",
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    let text = response.choices[0].message.content.trim();
-    console.log("📥 ចម្លើយឆៅពី AI (Raw):", text);
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error("រក JSON អត់ឃើញទេបង! AI និយាយក្រៅរឿងហើយ។");
-    }
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response
+      .text()
+      .replace(/```json|```/g, "")
+      .trim();
+    return JSON.parse(text);
   } catch (e) {
-    console.error("❌ AI Error ពេញទំហឹង:", e.message);
+    console.error("AI Error:", e);
     return {
       isAssignment: false,
-      reply:
-        "Oops! Leakhena is feeling a bit dizzy right now. The server is acting up! Try again later, loser! 😵‍💫",
+      reply: "អូនលក្ខិណា វិលមុខហើយ! សាកម្តងទៀតមើល៍បង!",
     };
   }
 }
+
 // =====================
 // COMMANDS
 // =====================
@@ -342,6 +339,10 @@ bot.command("clear", async (ctx) => {
 // FILE HANDLERS (ឯកសារ & រូបភាព) 📦
 // =====================
 
+// =====================
+// FILE HANDLERS (ឯកសារ & រូបភាព) 📦
+// =====================
+
 // ចាប់យកឯកសារ (ZIP, PDF, Word...)
 bot.on("document", async (ctx) => {
   const caption = ctx.message.caption || "";
@@ -353,8 +354,7 @@ bot.on("document", async (ctx) => {
   if (!isPrivate && !isMentioned && !isCalledName) return;
 
   const doc = ctx.message.document;
-  const isZip =
-    doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
+  const isZip = doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
 
   try {
     const newFile = new FileModel({
@@ -384,9 +384,9 @@ bot.on("document", async (ctx) => {
 // ចាប់យករូបភាព (Photos)
 bot.on("photo", async (ctx) => {
   const caption = ctx.message.caption || "";
-  const isPrivate = ctx.chat.type === "private";
-  const isMentioned = caption.includes(`@${ctx.botInfo.username}`);
-  const isCalledName = caption.includes("លក្ខិណា");
+  const isPrivate = ctx.chat.type === "private"; 
+  const isMentioned = caption.includes(`@${ctx.botInfo.username}`); 
+  const isCalledName = caption.includes("លក្ខិណា"); 
 
   // 💡 បើបងផ្ញើរូបចូល Group ហើយអត់សរសេរឈ្មោះអូនក្នុង Caption ទេ អូនអត់ Save ទេចា៎!
   if (!isPrivate && !isMentioned && !isCalledName) return;
@@ -406,14 +406,13 @@ bot.on("photo", async (ctx) => {
 
     ctx.reply(
       `📸 **អូន Save រូបភាពនេះទុកឱ្យហើយចា៎!** (វាយ /getfiles ដើម្បីទាញយកវិញ)`,
-      { reply_to_message_id: ctx.message.message_id },
+      { reply_to_message_id: ctx.message.message_id }
     );
   } catch (err) {
     console.error(err);
     ctx.reply("❌ សុំទោសបង អូន Save រូបភាពអត់បានទេ!");
   }
 });
-
 // =====================
 // AI HANDLE TEXT (With Quota, Trigger & Reply) 🪄
 // =====================
@@ -429,28 +428,28 @@ bot.on("text", async (ctx) => {
   // 💡 អូននឹងធ្វើការ លុះត្រាតែស្ថិតក្នុងលក្ខខណ្ឌខាងលើមួយ
   if (isPrivate || isMentioned || isCalledName) {
     // ២. ឆែក Quota សិនមុននឹងហៅ AI មកធ្វើការ
-    // const usage = await checkUsage();
+    const usage = await checkUsage();
 
-    // if (usage.count >= 20) {
-    //   return ctx.reply(
-    //     "បងអើយ... អូនអស់កម្លាំងនិយាយហើយ! ថ្ងៃហ្នឹងអូននិយាយ ២០ ដងអស់ហើយ ចាំស្អែកណា៎បង! 😴",
-    //     { reply_to_message_id: ctx.message.message_id },
-    //   );
-    // }
+    if (usage.count >= 20) {
+      return ctx.reply(
+        "បងអើយ... អូនអស់កម្លាំងនិយាយហើយ! ថ្ងៃហ្នឹងអូននិយាយ ២០ ដងអស់ហើយ ចាំស្អែកណា៎បង! 😴",
+        { reply_to_message_id: ctx.message.message_id },
+      );
+    }
 
-    // await ctx.sendChatAction("typing");
-    // const aiRes = await askAI(text);
+    await ctx.sendChatAction("typing");
+    const aiRes = await askAI(text);
 
-    // // Update Quota រាល់ពេលហៅ AI បានជោគជ័យ
-    // usage.count += 1;
-    // await usage.save();
+    // Update Quota រាល់ពេលហៅ AI បានជោគជ័យ
+    usage.count += 1;
+    await usage.save();
 
-    // let replyMsg = aiRes.reply;
+    let replyMsg = aiRes.reply;
 
-    // // ៣. បើដល់សារទី ១៨ ឬ ១៩ ត្រូវរំលឹកបង
-    // if (usage.count === 18 || usage.count === 19) {
-    //   replyMsg += `\n\n_(បងអើយ... អូនលក្ខិណា សល់ដង្ហើមតែ ${20 - usage.count} ដងទៀតទេសម្រាប់ថ្ងៃនេះ!)_`;
-    // }
+    // ៣. បើដល់សារទី ១៨ ឬ ១៩ ត្រូវរំលឹកបង
+    if (usage.count === 18 || usage.count === 19) {
+      replyMsg += `\n\n_(បងអើយ... អូនលក្ខិណា សល់ដង្ហើមតែ ${20 - usage.count} ដងទៀតទេសម្រាប់ថ្ងៃនេះ!)_`;
+    }
 
     if (aiRes.isAssignment) {
       // ✅ កត់ Assignment ចូល MongoDB
@@ -492,7 +491,7 @@ bot.on("text", async (ctx) => {
 
   bot.launch();
   console.log(
-    "🚀 Bot is running with MongoDB, File Saver, Quota Tracker, & OpenRouter (Step 3.5 Flash)...",
+    "🚀 Bot is running with MongoDB, File Saver, Quota Tracker, & Gemini 2.5 Flash...",
   );
 })();
 
