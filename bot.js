@@ -1,16 +1,18 @@
 require("dotenv").config();
 const { Telegraf } = require("telegraf");
-const mongoose = require("mongoose"); // ប្រើ Mongoose ជំនួស fs
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const mongoose = require("mongoose");
+const OpenAI = require("openai"); // 🔄 ប្តូរពី GoogleGenerativeAI មកប្រើ OpenAI សម្រាប់ OpenRouter
 
 // =====================
 // SETUP & CONFIG
 // =====================
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ✅ ប្រើ Model 1.5 Flash (ឬ 2.5 Flash តាមដែលបងចង់បាន)
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// ✅ បង្កើត Object សម្រាប់តភ្ជាប់ទៅ OpenRouter
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY, // ⚠️ កុំភ្លេចបន្ថែម OPENROUTER_API_KEY ក្នុង .env file របស់បង
+});
 
 // =====================
 // MONGODB CONNECTION 🍃
@@ -96,13 +98,13 @@ async function checkUsage() {
 }
 
 // =====================
-// AI BRAIN 🧠
+// AI BRAIN 🧠 (🔄 Updated to use OpenRouter - Step 3.5 Flash)
 // =====================
 async function askAI(message) {
   const today = new Date().toISOString().split("T")[0];
 
   const prompt = `
-    Context: You are a funny,Your name is លក្ខិណា, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
+    Context: You are a funny, Your name is លក្ខិណា, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
     User Input: "${message}"
     
     Instruction:
@@ -121,22 +123,25 @@ async function askAI(message) {
          "reply": "Funny/Roasting Khmer reply."
        }
     
-    IMPORTANT: Return ONLY valid JSON.
+    IMPORTANT: Return ONLY valid JSON object. Do not wrap in markdown code blocks.
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response
-      .text()
-      .replace(/```json|```/g, "")
-      .trim();
+    const response = await openai.chat.completions.create({
+      model: "stepfun/step-3-5-flash:free", // 🟢 ប្រើ Model ថ្មីរបស់បងនៅទីនេះ
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" } // 🛡️ ការពារមិនឱ្យវាចេញអក្សរផ្ដេសផ្ដាសក្រៅពី JSON
+    });
+
+    let text = response.choices[0].message.content.trim();
+    // លុប Markdown បើវាមានជាប់មកបន្តិចបន្តួច
+    text = text.replace(/```json|```/g, "").trim(); 
     return JSON.parse(text);
   } catch (e) {
     console.error("AI Error:", e);
     return {
       isAssignment: false,
-      reply: "អូនលក្ខិណា វិលមុខហើយ! សាកម្តងទៀតមើល៍បង!",
+      reply: "អូនលក្ខិណា វិលមុខហើយបង! ថ្ងៃហ្នឹង Server រាងតឹង សាកម្តងទៀតមើល៍! 😵‍💫",
     };
   }
 }
@@ -339,10 +344,6 @@ bot.command("clear", async (ctx) => {
 // FILE HANDLERS (ឯកសារ & រូបភាព) 📦
 // =====================
 
-// =====================
-// FILE HANDLERS (ឯកសារ & រូបភាព) 📦
-// =====================
-
 // ចាប់យកឯកសារ (ZIP, PDF, Word...)
 bot.on("document", async (ctx) => {
   const caption = ctx.message.caption || "";
@@ -413,6 +414,7 @@ bot.on("photo", async (ctx) => {
     ctx.reply("❌ សុំទោសបង អូន Save រូបភាពអត់បានទេ!");
   }
 });
+
 // =====================
 // AI HANDLE TEXT (With Quota, Trigger & Reply) 🪄
 // =====================
@@ -491,7 +493,7 @@ bot.on("text", async (ctx) => {
 
   bot.launch();
   console.log(
-    "🚀 Bot is running with MongoDB, File Saver, Quota Tracker, & Gemini 2.5 Flash...",
+    "🚀 Bot is running with MongoDB, File Saver, Quota Tracker, & OpenRouter (Step 3.5 Flash)...",
   );
 })();
 
