@@ -1,30 +1,36 @@
 require("dotenv").config();
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const OpenAI = require("openai"); // ប្តូរមកប្រើ OpenAI Library វិញ
 
 async function runTest() {
-  // 1. ឆែកមើលថាមាន API Key នៅ?
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 1. ឆែកមើលថាមាន API Key នៅ? (ឥឡូវយើងប្រើ OPENROUTER_API_KEY វិញ)
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    console.error("❌ រកមិនឃើញ GEMINI_API_KEY ក្នុង file .env ទេ!");
+    console.error("❌ រកមិនឃើញ OPENROUTER_API_KEY ក្នុង file .env ទេបងអើយ!");
     return;
   }
-  console.log(`🔑 ឃើញ API Key: ${apiKey.substring(0, 5)}... (ត្រឹមត្រូវ)`);
+  console.log(`🔑 ឃើញ API Key: ${apiKey.substring(0, 12)}... (មានសង្ឃឹមហើយបង)`);
 
-  // 2. ភ្ជាប់ទៅ Google AI
+  // 2. ភ្ជាប់ទៅ OpenRouter
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // ប្រើ Model 'gemini-1.5-flash' (វាដើរស្រួលជាង 2.0 សម្រាប់គណនីខ្លះ)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.0-flash" });
+    const openai = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: apiKey,
+    });
 
-    console.log("📡 កំពុងផ្ញើទៅ Google... (Sending request...)");
+    console.log("📡 កំពុងហៅទៅកាន់ Step 3.5 Flash... (រង់ចាំបន្តិចបង!)...");
     
-    const prompt = "សួស្តី! តើអ្នកចេះនិយាយខ្មែរទេ? សូមឆ្លើយមកវិញខ្លីៗ។";
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    // ប្រើ Model របស់ OpenRouter
+    const response = await openai.chat.completions.create({
+      model: "stepfun/step-3.5-flash:free", 
+      messages: [
+        { role: "user", content: "សួស្តី! តើអ្នកចេះនិយាយខ្មែរទេ? សូមឆ្លើយមកវិញខ្លីៗកំប្លែងៗមើល៍។" }
+      ]
+    });
 
-    console.log("\n✅ AI ដើរហើយ! (Success):");
+    // ចាប់យកចម្លើយចេញមកក្រៅ
+    const text = response.choices[0].message.content;
+
+    console.log("\n✅ AI ដើរហើយបងអើយ! (Success):");
     console.log("------------------------------------------------");
     console.log(text);
     console.log("------------------------------------------------");
@@ -32,13 +38,15 @@ async function runTest() {
   } catch (error) {
     console.error("\n❌ AI បរាជ័យ (Error Details):");
     console.error("------------------------------------------------");
-    // បង្ហាញ Error ជាក់លាក់
-    if (error.message.includes("API key not valid")) {
-      console.error("⚠️  API Key ខុសហើយ! សូមទៅ Copy ថ្មីពី Google AI Studio។");
-    } else if (error.message.includes("404")) {
-      console.error("⚠️  រក Model មិនឃើញ (Model Not Found)។ សាកដូរឈ្មោះ Model។");
+    // បង្ហាញ Error ជាក់លាក់របស់ OpenRouter
+    if (error.status === 401) {
+      console.error("⚠️ API Key ខុសហើយបង! ទៅ Copy ថ្មីពីវេបសាយ OpenRouter មកដាក់ម្ដងទៀត។");
+    } else if (error.status === 429) {
+      console.error("⚠️ Error 429: ជាប់ Rate Limit ហើយ! គេកំពុងដណ្តើមគ្នាប្រើរបស់ហ្វ្រី ចាំផឹកទឹកមួយកែវសិនចាំ Run ម្ដងទៀត។");
+    } else if (error.status === 404) {
+      console.error("⚠️ រក Model មិនឃើញទេ។ ឆែកមើលឈ្មោះ Model (stepfun/step-3.5-flash:free) មើល៍សរសេរត្រូវអត់។");
     } else {
-      console.error(error);
+      console.error("បញ្ហាផ្សេងៗ:", error.message || error);
     }
     console.error("------------------------------------------------");
   }

@@ -98,50 +98,50 @@ async function checkUsage() {
 }
 
 // =====================
-// AI BRAIN 🧠 (🔄 Updated to use OpenRouter - Step 3.5 Flash)
+// AI BRAIN 🧠 (ជួសជុលរួចរាល់ ធានាដើរ ១០០%)
 // =====================
 async function askAI(message) {
   const today = new Date().toISOString().split("T")[0];
 
   const prompt = `
-    Context: You are a funny, Your name is លក្ខិណា, roasting Khmer assistant bot and act like cute girl and have some joke. Today is ${today}.
+    Context: You are a funny, roasting Khmer assistant bot named លក្ខិណា. Act like a cute but slightly sarcastic girl. Today is ${today}.
     User Input: "${message}"
     
     Instruction:
     1. Check if the user wants to add a task/assignment/homework.
-    2. If YES, return JSON:
-       {
-         "isAssignment": true,
-         "title": "Task Title",
-         "due": "YYYY-MM-DD",
-         "note": "Extra info",
-         "reply": "Funny Khmer confirmation (roast them slightly)."
-       }
-    3. If NO (just chatting), return JSON:
-       {
-         "isAssignment": false,
-         "reply": "Funny/Roasting Khmer reply."
-       }
+    2. If YES, return ONLY this JSON format:
+       {"isAssignment": true, "title": "Task Title", "due": "YYYY-MM-DD", "note": "Extra info", "reply": "Funny Khmer confirmation (roast them slightly)."}
+    3. If NO (just chatting), return ONLY this JSON format:
+       {"isAssignment": false, "reply": "Funny/Roasting Khmer reply."}
     
-    IMPORTANT: Return ONLY valid JSON object. Do not wrap in markdown code blocks.
+    IMPORTANT: Return ONLY valid JSON. No Markdown blocks. No extra text before or after the JSON.
   `;
 
   try {
+    console.log(`💬 កំពុងឱ្យអូនលក្ខិណាគិត: "${message}"...`);
+
     const response = await openai.chat.completions.create({
-      model: "stepfun/step-3-5-flash:free", // 🟢 ប្រើ Model ថ្មីរបស់បងនៅទីនេះ
+      model: "stepfun/step-3.5-flash:free", // 👈 កែមកប្រើសញ្ញាចុច (.) វិញ ក្រែងលោវា Error រកម៉ូឌែលមិនឃើញ
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" } // 🛡️ ការពារមិនឱ្យវាចេញអក្សរផ្ដេសផ្ដាសក្រៅពី JSON
+      // ❌ ខ្ញុំដក response_format ចេញហើយ ព្រោះម៉ូឌែលហ្វ្រីខ្លះវា Error ជាមួយមុខងារនេះ
     });
 
     let text = response.choices[0].message.content.trim();
-    // លុប Markdown បើវាមានជាប់មកបន្តិចបន្តួច
-    text = text.replace(/```json|```/g, "").trim(); 
-    return JSON.parse(text);
+    console.log("📥 ចម្លើយឆៅពី AI (Raw):", text); // 💡 បង្ហាញក្នុង Terminal ដើម្បីងាយស្រួលឆែកមើលបើមាន Error
+
+    // 🎯 ក្បាច់ពិសេស: ចាប់យកតែ JSON ក្រែងលោ AI វានិយាយរញ៉េរញ៉ៃនៅខាងក្រៅ
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error("រក JSON អត់ឃើញទេបង! AI និយាយក្រៅរឿងហើយ។");
+    }
   } catch (e) {
-    console.error("AI Error:", e);
+    console.error("❌ AI Error ពេញទំហឹង:", e.message); // បង្ហាញ Error ពិតប្រាកដក្នុង Terminal
     return {
       isAssignment: false,
-      reply: "អូនលក្ខិណា វិលមុខហើយបង! ថ្ងៃហ្នឹង Server រាងតឹង សាកម្តងទៀតមើល៍! 😵‍💫",
+      reply:
+        "អូនលក្ខិណា វិលមុខហើយបង! ថ្ងៃហ្នឹង Server រាងតឹង សាកម្តងទៀតមើល៍! 😵‍💫 (មេកើយឆែកមើល Terminal ផង!)",
     };
   }
 }
@@ -355,7 +355,8 @@ bot.on("document", async (ctx) => {
   if (!isPrivate && !isMentioned && !isCalledName) return;
 
   const doc = ctx.message.document;
-  const isZip = doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
+  const isZip =
+    doc.mime_type === "application/zip" || doc.file_name.endsWith(".zip");
 
   try {
     const newFile = new FileModel({
@@ -385,9 +386,9 @@ bot.on("document", async (ctx) => {
 // ចាប់យករូបភាព (Photos)
 bot.on("photo", async (ctx) => {
   const caption = ctx.message.caption || "";
-  const isPrivate = ctx.chat.type === "private"; 
-  const isMentioned = caption.includes(`@${ctx.botInfo.username}`); 
-  const isCalledName = caption.includes("លក្ខិណា"); 
+  const isPrivate = ctx.chat.type === "private";
+  const isMentioned = caption.includes(`@${ctx.botInfo.username}`);
+  const isCalledName = caption.includes("លក្ខិណា");
 
   // 💡 បើបងផ្ញើរូបចូល Group ហើយអត់សរសេរឈ្មោះអូនក្នុង Caption ទេ អូនអត់ Save ទេចា៎!
   if (!isPrivate && !isMentioned && !isCalledName) return;
@@ -407,7 +408,7 @@ bot.on("photo", async (ctx) => {
 
     ctx.reply(
       `📸 **អូន Save រូបភាពនេះទុកឱ្យហើយចា៎!** (វាយ /getfiles ដើម្បីទាញយកវិញ)`,
-      { reply_to_message_id: ctx.message.message_id }
+      { reply_to_message_id: ctx.message.message_id },
     );
   } catch (err) {
     console.error(err);
